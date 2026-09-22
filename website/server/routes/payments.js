@@ -12,6 +12,7 @@ import {
 import {
   lookupPromo, consumePromo, PROMO_MESSAGES, discountAppliesTo,
 } from "../services/promos.js";
+import { prepareReceipt, RECEIPT_RETENTION_MONTHS } from "../services/receipts.js";
 
 const router = express.Router();
 
@@ -227,18 +228,28 @@ router.post("/instapay", async (req, res) => {
   // at midnight and hand out two in ten minutes.
   try {
     const { rows } = await query(
-      `SELECT created_at FROM payments
+      `SELECT created_at, status FROM payments
         WHERE account_id = $1 AND created_at > now() - interval '24 hours'
         ORDER BY created_at DESC LIMIT 1`, [req.user.id]);
     if (rows.length) {
       const nextAt = new Date(new Date(rows[0].created_at).getTime() + 86_400_000);
       const hours = Math.max(1, Math.ceil((nextAt - Date.now()) / 3_600_000));
+      // Rejections count against the cap, so someone whose genuine transfer
+      // was misread hits this. Telling them "one per day" and nothing else
+      // would read as a refusal to look at it -- say what actually happens
+      // to a rejected payment and how to reach a human.
+      const wasRejected = rows[0].status === "rejected";
       return res.status(429).json({
-        error: `You can only submit one transfer per day. Try again in `
-             + `${hours} hour${hours === 1 ? "" : "s"}.`
-             + ` If your last payment was rejected by mistake, reply on the`
-             + ` feedback page and it will be reviewed manually.`,
+        error: wasRejected
+          ? `Your last transfer could not be verified automatically and is `
+            + `waiting for manual review — you do not need to send another. `
+            + `If you want it looked at sooner, report it and include the `
+            + `transaction reference. You can submit again in ${hours} `
+            + `hour${hours === 1 ? "" : "s"} if you need to.`
+          : `You can only submit one transfer per day. Try again in `
+            + `${hours} hour${hours === 1 ? "" : "s"}.`,
         code: "DAILY_LIMIT",
+        previous_status: rows[0].status,
         next_at: nextAt.toISOString(),
       });
     }
@@ -345,7 +356,37 @@ router.post("/instapay", async (req, res) => {
   // extraction missed the field.
   const ref = claimedReference;
 
+  // Prepare the receipt before any branch returns: a rejection is exactly the
+  // case someone disputes, so it needs the evidence too.
+  const receipt = await prepareReceipt(image.base64, image.mimeType);
+
   if (verification.status === "rejected") {
+    // Recorded rather than dropped. Without a row, "I paid and you refused
+    // me" cannot be checked, and there is no way to see how often automatic
+    // rejection fires or whether it is wrong.
+    try {
+      await query(
+        `INSERT INTO payments
+           (account_id, plan_key, months, amount, currency, status,
+            instapay_reference, extracted, checks, auto_verdict, reasons,
+            screenshot_mime, screenshot_bytes, screenshot_data,
+            screenshot_kept_until, reviewed_at)
+         VALUES ($1,$2,$3,$4,$5,'rejected',$6,$7::jsonb,$8::jsonb,'rejected',
+                 $9::jsonb,$10,$11,$12,
+                 now() + ($13 || ' months')::interval, now())`,
+        [req.user.id, planKey, plan.months, expectedAmount, CURRENCY, ref,
+         JSON.stringify(verification.extracted),
+         JSON.stringify(verification.checks),
+         JSON.stringify(verification.reasons),
+         receipt.mimeType, receipt.bytes, receipt.buffer,
+         String(RECEIPT_RETENTION_MONTHS)]);
+    } catch (err) {
+      // A rejection that cannot be logged is still a rejection; the user must
+      // hear the outcome either way.
+      if (err.code !== "23505") {
+        console.error("rejected payment log failed:", err.message);
+      }
+    }
     return res.json({
       status: "rejected",
       reasons: verification.reasons,
@@ -361,14 +402,16 @@ router.post("/instapay", async (req, res) => {
          (account_id, plan_key, months, amount, currency, discount_code_id,
           percent_off, status, instapay_reference, extracted, checks,
           auto_verdict, reasons, screenshot_mime, screenshot_bytes,
-          reviewed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13::jsonb,$14,$15,$16)
+          screenshot_data, screenshot_kept_until, reviewed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13::jsonb,
+               $14,$15,$16, now() + ($17 || ' months')::interval, $18)
        RETURNING id, status, created_at`,
       [req.user.id, planKey, plan.months, expectedAmount, CURRENCY, discountId,
        percentOff || null, approved ? "approved" : "pending", ref,
        JSON.stringify(verification.extracted), JSON.stringify(verification.checks),
        verification.status, JSON.stringify(verification.reasons),
-       image.mimeType, bytes, approved ? new Date() : null]);
+       receipt.mimeType, receipt.bytes, receipt.buffer,
+       String(RECEIPT_RETENTION_MONTHS), approved ? new Date() : null]);
 
     if (approved) {
       await grantPlus(req.user.id, plan.months);

@@ -21,6 +21,7 @@ import {
   ownHandleWindow, OWN_HANDLE_GAP_MS,
 } from "./services/quotas.js";
 import { resourceLinesFor } from "./services/resources.js";
+import { pruneExpiredReceipts } from "./services/receipts.js";
 
 dotenv.config();
 
@@ -47,9 +48,19 @@ const ACCOUNTS_ENABLED = dbEnabled();
 if (ACCOUNTS_ENABLED) {
   app.use(attachUser);
   ensureSchema()
-    .then(() => { console.log("Account schema ready."); return pruneExpired(); })
+    .then(() => {
+      console.log("Account schema ready.");
+      // Both prunes wait for the schema: the receipt prune touches a column
+      // added by it, and running first logs a confusing "column does not
+      // exist" on every boot that would mask a real failure.
+      return Promise.all([pruneExpired(), pruneExpiredReceipts(query)]);
+    })
     .catch((err) => console.error("Account schema setup failed:", err.message));
   setInterval(pruneExpired, 6 * 60 * 60 * 1000).unref();
+  // Receipts are kept 24 months and then deleted, on the same cadence as
+  // session pruning rather than adding another scheduler.
+  setInterval(() => pruneExpiredReceipts(query).catch(() => {}),
+              6 * 60 * 60 * 1000).unref();
 } else {
   console.warn("DATABASE_URL not set — accounts and admin are disabled.");
   app.use((req, _res, next) => { req.user = null; next(); });

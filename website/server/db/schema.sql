@@ -362,3 +362,20 @@ CREATE INDEX IF NOT EXISTS idx_coach_progress_topic
 -- How many days each plan has, so completion percentage has a denominator
 -- without re-parsing the stored HTML on every query.
 ALTER TABLE searches ADD COLUMN IF NOT EXISTS coach_day_count INT;
+
+-- ── stored payment receipts ─────────────────────────────────────────────────
+-- The terms promise receipts are kept so a payment can be reviewed and
+-- disputed, so they are actually kept. Downscaled to ~800px before storing:
+-- every field a dispute turns on (reference, amount, both parties, date) stays
+-- legible at roughly a tenth of the original size.
+--
+-- Held for 24 months and then deleted by pruneExpiredReceipts(). The payment
+-- row itself survives -- reference, amount and date are the accounting record
+-- and are not personal banking imagery.
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_data  BYTEA;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_kept_until TIMESTAMPTZ;
+
+-- Finding receipts due for deletion without scanning every payment.
+CREATE INDEX IF NOT EXISTS idx_payments_receipt_expiry
+    ON payments (screenshot_kept_until)
+    WHERE screenshot_data IS NOT NULL;

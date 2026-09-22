@@ -552,3 +552,34 @@ router.get("/coach/stats", async (_req, res) => {
     res.status(500).json({ error: "Could not load coach stats." });
   }
 });
+
+/** The stored receipt for one payment, for reviewing or resolving a dispute.
+ *
+ *  Served as an image rather than embedded in JSON: it is only fetched when an
+ *  admin opens a specific payment, so it never rides along with the list. */
+router.get("/payments/:id/receipt", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Not a valid payment id." });
+  }
+  try {
+    const { rows } = await query(
+      `SELECT screenshot_data, screenshot_mime, screenshot_kept_until
+         FROM payments WHERE id = $1`, [id]);
+    if (!rows.length) return res.status(404).json({ error: "Payment not found." });
+    if (!rows[0].screenshot_data) {
+      // Either past its retention date or submitted before receipts were kept.
+      return res.status(410).json({
+        error: "No receipt is stored for this payment.",
+        code: "RECEIPT_GONE",
+      });
+    }
+    res.set("Content-Type", rows[0].screenshot_mime || "image/jpeg");
+    // Never cached by a shared proxy: this is someone's banking screenshot.
+    res.set("Cache-Control", "private, no-store");
+    res.send(rows[0].screenshot_data);
+  } catch (err) {
+    console.error("receipt fetch failed:", err.message);
+    res.status(500).json({ error: "Could not load that receipt." });
+  }
+});
