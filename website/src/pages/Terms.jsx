@@ -1,6 +1,7 @@
 import { T } from "../lib/theme.js";
 import { Card } from "../components/ui.jsx";
 import { FEEDBACK_URL } from "../components/Footer.jsx";
+import { SUPPORT_EMAIL } from "../lib/contact.js";
 
 // Kept in step with TERMS_VERSION in server/routes/auth.js, which is what each
 // account records at sign-up.
@@ -33,6 +34,16 @@ const SECTIONS = [
     ],
   },
   {
+    h: "Refunds and cancellation",
+    p: [
+      "You can ask for a full refund within 14 days of a payment being approved, provided you have not run an analysis or generated a coaching plan since then. Once the service has been used, or once 14 days have passed, the term stands.",
+      `To request one, email ${SUPPORT_EMAIL} with the transaction reference. We will check it and, if it qualifies, send the money back by InstaPay within 14 days of your request.`,
+      "Terms do not renew and nothing recurs, so there is no subscription to cancel. If you simply stop paying, your Plus term runs to its end date and the account returns to the free tier.",
+      "If we discontinue the service, or suspend your account for a reason that is not your doing, we will refund the unused part of your term pro-rata. We will not refund time remaining on an account suspended for submitting payment receipts that are not yours or for deliberately bypassing the limits set out here.",
+      "Refunds are returned to the account that sent the transfer. We cannot send a refund to a different account.",
+    ],
+  },
+  {
     h: "What we cannot promise",
     p: [
       "The analysis is a model's estimate, not advice and not a prediction. Ratings, recommended problems and coaching plans may be wrong, and acting on them is your decision.",
@@ -52,6 +63,14 @@ const SECTIONS = [
     p: [
       "Do not attempt to bypass the limits described here, submit payment receipts that are not yours, or use the service to place load on Codeforces.",
       "Accounts that do may be suspended.",
+    ],
+  },
+  {
+    h: "Contacting us",
+    p: [
+      `Anything about a payment — a refund, a rejected transfer, a receipt we could not read — goes to ${SUPPORT_EMAIL}. Please include the transaction reference. Do not post payment details on the public discussion channel.`,
+      "Bugs, feature requests and general questions are best raised on the discussion channel, linked at the bottom of every page.",
+      "We aim to answer within a few days.",
     ],
   },
   {

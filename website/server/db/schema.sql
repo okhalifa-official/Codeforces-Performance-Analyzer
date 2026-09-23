@@ -379,3 +379,19 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS screenshot_kept_until TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_payments_receipt_expiry
     ON payments (screenshot_kept_until)
     WHERE screenshot_data IS NOT NULL;
+
+-- ── refunds ─────────────────────────────────────────────────────────────────
+-- A refund is recorded against the payment it reverses. InstaPay cannot be
+-- reversed programmatically, so this records that a transfer was sent back by
+-- hand -- it is the audit trail, not the mechanism.
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_at    TIMESTAMPTZ;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS refunded_by    UUID REFERENCES accounts(id);
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_note    TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS refund_amount  NUMERIC(10,2);
+
+-- 'refunded' is a fourth status. ADD COLUMN IF NOT EXISTS cannot widen an
+-- existing CHECK, so the constraint is dropped and rebuilt -- idempotent, and
+-- it runs on every boot without effect once the new form is in place.
+ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_status_check;
+ALTER TABLE payments ADD CONSTRAINT payments_status_check
+    CHECK (status IN ('pending','approved','rejected','refunded'));

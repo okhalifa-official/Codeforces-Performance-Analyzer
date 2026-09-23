@@ -5,6 +5,7 @@ import { api } from "../lib/api.js";
 import { Card, Button, Badge } from "./ui.jsx";
 import Icon, { IconTile } from "./Icon.jsx";
 import { ReportIssueButton } from "./Footer.jsx";
+import { SUPPORT_EMAIL, PAYMENT_ISSUE_MAILTO } from "../lib/contact.js";
 
 /** InstaPay checkout: pick a term, transfer, upload the receipt.
  *
@@ -553,8 +554,13 @@ function Outcome({ result, onRetry }) {
       {result.status === "rejected" && (
         <p style={{ color: T.textFaint, fontSize: 12.5, lineHeight: 1.6,
                     margin: "14px auto 0", maxWidth: 400 }}>
-          Waiting for manual approval. If this looks wrong, report it and
-          include the transaction reference.
+          Waiting for manual approval. If this looks wrong, email{" "}
+          <a href={PAYMENT_ISSUE_MAILTO}
+             style={{ color: T.accent, textDecoration: "none" }}>
+            {SUPPORT_EMAIL}
+          </a>{" "}
+          with your transaction reference — please don&rsquo;t post payment
+          details publicly.
         </p>
       )}
 

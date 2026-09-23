@@ -5,6 +5,7 @@ import express from "express";
 import { z } from "zod";
 import { query } from "../db/pool.js";
 import { requireAdmin, hashPassword } from "../middleware/auth.js";
+import { refundEligibility } from "../services/refunds.js";
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -432,6 +433,84 @@ router.get("/payments", async (req, res) => {
   } catch (err) {
     console.error("list payments failed:", err.message);
     res.status(500).json({ error: "Could not load payments." });
+  }
+});
+
+// Registered BEFORE /payments/:id/:action below: Express takes the first
+// matching route, and the wildcard would otherwise swallow "refund" and
+// answer "Unknown action".
+/** Whether a payment qualifies for a refund, and the facts behind the answer. */
+router.get("/payments/:id/refund", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Not a valid payment id." });
+  }
+  try {
+    const verdict = await refundEligibility(query, id);
+    if (!verdict.found) return res.status(404).json({ error: "Payment not found." });
+    res.json(verdict);
+  } catch (err) {
+    console.error("refund check failed:", err.message);
+    res.status(500).json({ error: "Could not check that payment." });
+  }
+});
+
+/** Record a refund that has been sent, and take back the term it paid for. */
+router.post("/payments/:id/refund", async (req, res) => {
+  const id = Number(req.params.id);
+  const note = String(req.body?.note || "").slice(0, 500) || null;
+  // An admin may refund outside the policy -- a goodwill case, a mistake on
+  // our side -- but has to say so explicitly rather than by omission.
+  const override = Boolean(req.body?.override);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Not a valid payment id." });
+  }
+  try {
+    const verdict = await refundEligibility(query, id);
+    if (!verdict.found) return res.status(404).json({ error: "Payment not found." });
+    if (verdict.refundable === false && !override) {
+      return res.status(409).json({
+        error: "This payment does not qualify under the refund policy.",
+        code: verdict.reason,
+        verdict,
+      });
+    }
+
+    const { rows } = await query(
+      `UPDATE payments
+          SET refunded_at = now(), refunded_by = $2, refund_note = $3,
+              refund_amount = amount, status = 'refunded'
+        WHERE id = $1 AND refunded_at IS NULL
+        RETURNING account_id, months, amount, currency`,
+      [id, req.user.id, note]);
+    if (!rows.length) {
+      return res.status(409).json({ error: "That payment was already refunded." });
+    }
+
+    // Take back the time the payment bought. GREATEST keeps the result from
+    // going negative if the term has already been partly consumed by other
+    // payments.
+    await query(
+      `UPDATE accounts
+          SET plus_expires_at = GREATEST(now(),
+                COALESCE(plus_expires_at, now()) - ($2 || ' months')::interval),
+              plan = CASE
+                WHEN COALESCE(plus_expires_at, now())
+                     - ($2 || ' months')::interval <= now()
+                THEN 'free' ELSE plan END
+        WHERE id = $1`,
+      [rows[0].account_id, String(rows[0].months)]);
+
+    res.json({
+      ok: true,
+      refunded: Number(rows[0].amount),
+      currency: rows[0].currency,
+      months_reversed: rows[0].months,
+      outside_policy: override && verdict.refundable === false,
+    });
+  } catch (err) {
+    console.error("refund failed:", err.message);
+    res.status(500).json({ error: "Could not record that refund." });
   }
 });
 

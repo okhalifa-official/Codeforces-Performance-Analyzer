@@ -18,6 +18,9 @@ const router = express.Router();
 
 const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 const CURRENCY = String(process.env.INSTAPAY_CURRENCY || "EGP").toUpperCase();
+// Payment problems go to a private address, never the public channel:
+// a refund request carries a reference number and an amount.
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@digisolution.app";
 const HANDLE = String(process.env.INSTAPAY_HANDLE || "").trim();
 
 function requireUser(req, res) {
@@ -243,8 +246,8 @@ router.post("/instapay", async (req, res) => {
         error: wasRejected
           ? `Your last transfer could not be verified automatically and is `
             + `waiting for manual review — you do not need to send another. `
-            + `If you want it looked at sooner, report it and include the `
-            + `transaction reference. You can submit again in ${hours} `
+            + `If you want it looked at sooner, email ${SUPPORT_EMAIL} with `
+            + `the transaction reference. You can submit again in ${hours} `
             + `hour${hours === 1 ? "" : "s"} if you need to.`
           : `You can only submit one transfer per day. Try again in `
             + `${hours} hour${hours === 1 ? "" : "s"}.`,
