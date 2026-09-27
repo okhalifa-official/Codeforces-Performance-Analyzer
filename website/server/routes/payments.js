@@ -237,17 +237,19 @@ router.post("/instapay", async (req, res) => {
     if (rows.length) {
       const nextAt = new Date(new Date(rows[0].created_at).getTime() + 86_400_000);
       const hours = Math.max(1, Math.ceil((nextAt - Date.now()) / 3_600_000));
-      // Rejections count against the cap, so someone whose genuine transfer
-      // was misread hits this. Telling them "one per day" and nothing else
-      // would read as a refusal to look at it -- say what actually happens
-      // to a rejected payment and how to reach a human.
+      // An auto-rejected payment is now stored as 'pending' (see the
+      // instapay branch below), so a 'pending' row here is already caught by
+      // the PENDING_EXISTS check above -- this block only ever sees
+      // approved/rejected/refunded rows. A stored 'rejected' status is
+      // therefore always a human decision now, not the model's, so it is
+      // safe to call it final and point at support rather than "manual
+      // review", which would no longer be true.
       const wasRejected = rows[0].status === "rejected";
       return res.status(429).json({
         error: wasRejected
-          ? `Your last transfer could not be verified automatically and is `
-            + `waiting for manual review — you do not need to send another. `
-            + `If you want it looked at sooner, email ${SUPPORT_EMAIL} with `
-            + `the transaction reference. You can submit again in ${hours} `
+          ? `Your last transfer was reviewed and refused. If you think that `
+            + `is wrong, email ${SUPPORT_EMAIL} with the transaction `
+            + `reference. You can submit again in ${hours} `
             + `hour${hours === 1 ? "" : "s"} if you need to.`
           : `You can only submit one transfer per day. Try again in `
             + `${hours} hour${hours === 1 ? "" : "s"}.`,
@@ -367,6 +369,13 @@ router.post("/instapay", async (req, res) => {
     // Recorded rather than dropped. Without a row, "I paid and you refused
     // me" cannot be checked, and there is no way to see how often automatic
     // rejection fires or whether it is wrong.
+    //
+    // Stored as 'pending' (not 'rejected'): an automatic rejection is a
+    // machine's guess, not a final answer, and the UI and Terms both promise
+    // a human looks at it before it is truly refused. auto_verdict keeps the
+    // model's verdict so the review queue shows it was auto-rejected; the row
+    // sits in the same queue as a needs_review submission until an admin
+    // decides, so reviewed_at stays NULL here.
     try {
       await query(
         `INSERT INTO payments
@@ -374,9 +383,9 @@ router.post("/instapay", async (req, res) => {
             instapay_reference, extracted, checks, auto_verdict, reasons,
             screenshot_mime, screenshot_bytes, screenshot_data,
             screenshot_kept_until, reviewed_at)
-         VALUES ($1,$2,$3,$4,$5,'rejected',$6,$7::jsonb,$8::jsonb,'rejected',
+         VALUES ($1,$2,$3,$4,$5,'pending',$6,$7::jsonb,$8::jsonb,'rejected',
                  $9::jsonb,$10,$11,$12,
-                 now() + ($13 || ' months')::interval, now())`,
+                 now() + ($13 || ' months')::interval, NULL)`,
         [req.user.id, planKey, plan.months, expectedAmount, CURRENCY, ref,
          JSON.stringify(verification.extracted),
          JSON.stringify(verification.checks),

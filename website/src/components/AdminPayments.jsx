@@ -128,6 +128,20 @@ export default function AdminPayments() {
                     {p.auto_verdict === "needs_review" ? "needs a human" : p.auto_verdict}
                   </Badge>
 
+                  {/* A pending row can be here because the model auto-rejected
+                      it (a genuine payment it misread) rather than flagged it
+                      for review. The badge above already says "rejected", but
+                      that reads the same as a human decision -- call out that
+                      this one is still the model's guess, waiting on a
+                      person. */}
+                  {p.status === "pending" && p.auto_verdict === "rejected" && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 650, color: T.risk,
+                      border: `1px solid ${T.risk}`, borderRadius: 6,
+                      padding: "2px 7px", alignSelf: "flex-start",
+                    }}>auto-rejected</span>
+                  )}
+
                   {p.status === "pending" && (
                     <div style={{ display: "flex", gap: 7 }}>
                       <Button size="sm" variant="ghost" disabled={busy === p.id}

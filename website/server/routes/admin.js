@@ -402,7 +402,7 @@ router.put("/coach", async (req, res) => {
 /* ── InstaPay payments ───────────────────────────────────────────────────── */
 
 router.get("/payments", async (req, res) => {
-  const status = ["pending", "approved", "rejected"].includes(req.query.status)
+  const status = ["pending", "approved", "rejected", "refunded"].includes(req.query.status)
     ? req.query.status : "pending";
   try {
     const { rows } = await query(
