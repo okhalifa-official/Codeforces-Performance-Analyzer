@@ -26,7 +26,7 @@ import {
 // Bumped when the terms change, so it is visible which version each account
 // agreed to. Acceptance is implicit in creating an account, which the sign-up
 // form states next to the button.
-export const TERMS_VERSION = "2026-09-22";
+export const TERMS_VERSION = "2026-09-27";
 
 const router = express.Router();
 

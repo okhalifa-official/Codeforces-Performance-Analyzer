@@ -5,9 +5,16 @@ import { SUPPORT_EMAIL } from "../lib/contact.js";
 
 // Kept in step with TERMS_VERSION in server/routes/auth.js, which is what each
 // account records at sign-up.
-const VERSION = "2026-09-22";
+const VERSION = "2026-09-27";
 
 const SECTIONS = [
+  {
+    h: "Who we are",
+    p: [
+      "CFAnalyzer is operated by Omar Khalifa, an individual based in Egypt.",
+      `Contact: ${SUPPORT_EMAIL}.`,
+    ],
+  },
   {
     h: "What this service is",
     p: [
@@ -18,10 +25,13 @@ const SECTIONS = [
   {
     h: "Your account",
     p: [
-      "You need a working email address, which we ask you to confirm with a code before the analyzer can be used. One person should hold one account.",
+      "You need a working email address, which we ask you to confirm with a code before the analyzer can be used. Each person may hold one account.",
       "Your email address is fixed once the account exists. If you need it changed, contact us on the discussion channel and we will do it for you.",
       "Your Codeforces handle may be changed once every six months. Analysing a handle other than your own is limited: once every three months on the free tier, once a week on Plus.",
+      "Analysing your own handle is limited too: once a week on the free tier, three times a week on Plus, with at least 24 hours between analyses.",
+      "An AI coaching plan is available on Plus only, and each analysis can produce at most one plan.",
       "You are responsible for keeping your password to yourself and for what happens under your account.",
+      "You must be at least 13 years old to create an account. To buy Plus you must be 18 or older, or have permission from a parent or guardian who agrees to these terms on your behalf.",
     ],
   },
   {
@@ -30,7 +40,7 @@ const SECTIONS = [
       "Plus is sold in fixed terms of one, three or six months. Payment is by InstaPay transfer, confirmed by uploading the receipt and entering its reference number.",
       "An approved payment adds its term to any time you already have. Terms do not renew automatically and nothing is charged to you without you sending a transfer.",
       "One transfer may be submitted per day, and each transaction reference may be used once.",
-      "If an automatic check cannot confirm a payment, it goes to manual review. If something has gone wrong with a payment, contact us and we will sort it out.",
+      `Payments are checked automatically first. Any payment the automatic check does not approve is reviewed by a person before it is finally refused, and you can ask for that human review by emailing ${SUPPORT_EMAIL} with the transaction reference.`,
     ],
   },
   {
@@ -48,14 +58,19 @@ const SECTIONS = [
     p: [
       "The analysis is a model's estimate, not advice and not a prediction. Ratings, recommended problems and coaching plans may be wrong, and acting on them is your decision.",
       "The service depends on the Codeforces API and on our own infrastructure. It may be unavailable, and results may change as the model is retrained.",
+      "To the extent the law allows, our total liability to you for anything related to the service is limited to the amount you paid us in the 12 months before the claim.",
+      "Nothing in these terms limits rights you have under Egyptian consumer protection law that cannot be excluded.",
     ],
   },
   {
     h: "Your data",
     p: [
       "We store your email address, your Codeforces handle, your analyses and your payment records. Submitted payment screenshots are kept so payments can be reviewed and disputed.",
-      "We do not sell your data. Analyses are visible to you and to administrators of this service.",
-      "You may ask us to delete your account and its data through the discussion channel.",
+      "From each receipt we read the amount, currency, transaction reference, date and time, and the sender's and recipient's InstaPay addresses, phone numbers or account numbers as shown on the receipt.",
+      "Receipt images are kept for 24 months and then deleted. The payment record itself — reference, amount and date — is kept afterwards for accounting.",
+      "We do not sell your data. Payment screenshots are sent to Anthropic, the AI provider, to read the receipt, and emails are sent through Resend. Neither is used to sell your data.",
+      "Analyses are visible to you and to administrators of this service.",
+      `You can ask us to delete your account by emailing ${SUPPORT_EMAIL}. We will do so within 30 days. Payment records — reference, amount and date — are kept as long as required for accounting even after deletion.`,
     ],
   },
   {
@@ -71,6 +86,13 @@ const SECTIONS = [
       `Anything about a payment — a refund, a rejected transfer, a receipt we could not read — goes to ${SUPPORT_EMAIL}. Please include the transaction reference. Do not post payment details on the public discussion channel.`,
       "Bugs, feature requests and general questions are best raised on the discussion channel, linked at the bottom of every page.",
       "We aim to answer within a few days.",
+    ],
+  },
+  {
+    h: "Governing law",
+    p: [
+      "These terms are governed by the laws of the Arab Republic of Egypt, and any dispute will be heard by the competent courts of Cairo.",
+      `Before going to court, please contact us at ${SUPPORT_EMAIL} so we can try to resolve it.`,
     ],
   },
   {
