@@ -148,6 +148,11 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write
+    # Step-level `if:` cannot read the secrets context (it invalidates the
+    # whole workflow file, which silently stops the schedule), so expose
+    # whether a database is configured through the job env instead.
+    env:
+      HAS_DB: ${{ secrets.DATABASE_PUBLIC_URL != '' || secrets.DATABASE_URL != '' }}
 
     steps:
       - uses: actions/checkout@v5
@@ -267,7 +272,7 @@ jobs:
       # a silently-failed load would still go green and the site would serve
       # stale data while every step reported success.
       - name: Verify Postgres matches the new dataset
-        if: ${{ secrets.DATABASE_PUBLIC_URL != '' || secrets.DATABASE_URL != '' }}
+        if: env.HAS_DB == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_PUBLIC_URL || secrets.DATABASE_URL }}
         run: |
