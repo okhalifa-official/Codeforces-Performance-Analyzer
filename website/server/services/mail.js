@@ -17,7 +17,7 @@ const APP_NAME = "CFAnalyzer";
 // Where reset links point. In production this must be the real origin, or the
 // link in the email will 404.
 export function appOrigin() {
-  return (process.env.APP_ORIGIN || "https://cf-performance-analyzer.up.railway.app")
+  return (process.env.APP_ORIGIN || "https://cf-performance-analyzer.digisolution.app")
     .replace(/\/+$/, "");
 }
 
