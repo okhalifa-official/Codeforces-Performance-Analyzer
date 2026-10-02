@@ -11,6 +11,7 @@ import VerifyBanner from "../components/VerifyBanner.jsx";
 import PinnedPlan from "../components/PinnedPlan.jsx";
 import { shouldShowUpgrade } from "../components/UpgradeGate.jsx";
 import { useUpgrade } from "../lib/upgrade.jsx";
+import { useBeta } from "../lib/beta.jsx";
 import { tagInfo } from "../lib/copy.js";
 import Icon, { IconTile } from "../components/Icon.jsx";
 
@@ -35,15 +36,17 @@ export default function Dashboard() {
   // id of the search row created by the run currently on screen
   const [lastRunId, setLastRunId] = useState(null);
   // The post-login Plus screen, shown to free accounts at most once a week.
+  // Never in the beta: there is no Plus to offer.
   const upgrade = useUpgrade();
+  const { beta } = useBeta();
   useEffect(() => {
-    if (shouldShowUpgrade(user)) {
+    if (!beta && shouldShowUpgrade(user)) {
       // A beat after the dashboard paints, so it arrives as a moment rather
       // than blocking the page the user asked for.
       const t = setTimeout(() => upgrade.show(), 700);
       return () => clearTimeout(t);
     }
-  }, [user, upgrade]);
+  }, [user, upgrade, beta]);
   // Set when the view is a stored run rather than a fresh one.
   const [viewingSaved, setViewingSaved] = useState(null);
   const [loadingSaved, setLoadingSaved] = useState(null);
@@ -187,7 +190,7 @@ export default function Dashboard() {
       <VerifyBanner />
 
       {/* The week's work, first thing. Renders nothing without a pinned plan. */}
-      <PinnedPlan onOpenRun={(id, handle) => openSaved({ id, cf_handle: handle })} />
+      {!beta && <PinnedPlan onOpenRun={(id, handle) => openSaved({ id, cf_handle: handle })} />}
 
       {clockBad && (
         <ClockWarning
@@ -691,6 +694,7 @@ function OtherHandle({ limits, busy, clockBad, onRun }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const { show } = useUpgrade();
+  const { beta } = useBeta();
 
   // The server is the authority. Absent limits (admins) mean no meter.
   if (!limits) return null;
@@ -744,7 +748,7 @@ function OtherHandle({ limits, busy, clockBad, onRun }) {
                 <div style={{ fontSize: 13, color: T.textDim, lineHeight: 1.65 }}>
                   You have used this month&rsquo;s allowance. Runs on your own
                   handle are still unlimited.
-                  {!isPlus && (
+                  {!isPlus && !beta && (
                     <>
                       {" "}
                       <button
@@ -783,7 +787,7 @@ function OtherHandle({ limits, busy, clockBad, onRun }) {
                   <div style={{ fontSize: 12.5, color: T.textFaint, marginTop: 9,
                                 lineHeight: 1.6 }}>
                     This uses your one run per {isPlus ? "week" : "3 months"}.
-                    {!isPlus && " Plus raises it to one per week."}
+                    {!isPlus && !beta && " Plus raises it to one per week."}
                   </div>
                 </>
               )}

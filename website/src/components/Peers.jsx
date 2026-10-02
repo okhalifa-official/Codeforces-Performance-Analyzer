@@ -2,6 +2,7 @@ import { m } from "framer-motion";
 import { T, font } from "../lib/theme.js";
 import { Card, Badge, Info } from "./ui.jsx";
 import Icon from "./Icon.jsx";
+import { useBeta } from "../lib/beta.jsx";
 
 /** The ten users the model matched you against. Pro only.
  *
@@ -9,7 +10,10 @@ import Icon from "./Icon.jsx";
  *  measured against these people, so seeing who they are explains why a
  *  score moved. */
 export default function Peers({ peers, isPro, onUpgrade }) {
-  if (!peers?.length) return null;
+  const { beta } = useBeta();
+  // A blurred preview with an upgrade button is a sales surface; with no Plus
+  // to sell in the beta it is hidden outright.
+  if (!peers?.length || (beta && !isPro)) return null;
 
   return (
     <Card>

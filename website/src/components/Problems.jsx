@@ -7,6 +7,7 @@ import Icon from "./Icon.jsx";
 import {
   normalize, withLabels, selectHeadline, applyFilters, availableTopics, SORTS,
 } from "../lib/problems.js";
+import { useBeta } from "../lib/beta.jsx";
 import { Dropdown, RangeField, ClearChip } from "./Controls.jsx";
 
 const TONE = {
@@ -23,6 +24,9 @@ export default function Problems({ problems, userRating, isPro, onUpgrade }) {
   const [topic, setTopic] = useState("");
   const [range, setRange] = useState({ min: "", max: "" });
   const [expanded, setExpanded] = useState(false);
+  // In the beta nobody has Pro, so the locked sort/filter button and the
+  // "show more" upsell would only point at something that cannot be bought.
+  const { beta } = useBeta();
 
   const all = useMemo(
     () => withLabels((problems || []).map(normalize), userRating),
@@ -65,7 +69,7 @@ export default function Problems({ problems, userRating, isPro, onUpgrade }) {
           <Info text={METRICS.priority.long} />
         </div>
         <Controls
-          isPro={isPro} onUpgrade={onUpgrade}
+          isPro={isPro} beta={beta} onUpgrade={onUpgrade}
           sort={sort} setSort={setSort}
           topic={topic} setTopic={setTopic}
           topics={topics} range={range} setRange={setRange}
@@ -87,7 +91,7 @@ export default function Problems({ problems, userRating, isPro, onUpgrade }) {
         </AnimatePresence>
       </div>
 
-      {remaining > 0 && (
+      {remaining > 0 && (isPro || !beta) && (
         <MoreButton
           count={remaining} isPro={isPro} expanded={expanded}
           onExpand={() => setExpanded(true)} onUpgrade={onUpgrade}
@@ -152,8 +156,9 @@ function ProblemCard({ p, i }) {
   );
 }
 
-function Controls({ isPro, onUpgrade, sort, setSort, topic, setTopic, topics,
+function Controls({ isPro, beta, onUpgrade, sort, setSort, topic, setTopic, topics,
                     range, setRange }) {
+  if (!isPro && beta) return null;
   if (!isPro) {
     return (
       <button onClick={onUpgrade} style={{

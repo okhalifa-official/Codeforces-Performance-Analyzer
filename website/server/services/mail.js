@@ -1,11 +1,13 @@
 // Transactional email. Resend is the provider; the rest of the app only sees
-// sendVerificationCode / sendPasswordReset, so swapping providers is one file.
+// sendVerificationCode / sendPasswordReset / sendBetaWaitlistNotice, so
+// swapping providers is one file.
 //
 // Nothing here throws on a send failure. A caller that cannot email a code
 // still has to decide what to tell the user, and an exception mid-signup
 // would leave an account created but unreachable.
 
 import { Resend } from "resend";
+import { betaMaxAccounts } from "./beta.js";
 
 const FROM = process.env.MAIL_FROM || "CFAnalyzer <onboarding@resend.dev>";
 const APP_NAME = "CFAnalyzer";
@@ -121,5 +123,26 @@ export async function sendPasswordReset(to, token) {
         change.
       </p>`),
     text: `Reset your ${APP_NAME} password: ${link}\nThe link works once and expires in 60 minutes.`,
+  });
+}
+
+/** Sent when a sign-up lands past the closed-beta cap: the account exists but
+ *  cannot be used yet. */
+export async function sendBetaWaitlistNotice(to) {
+  const max = betaMaxAccounts();
+  return send({
+    to,
+    subject: `Your ${APP_NAME} account is on the waitlist`,
+    html: shell("You're on the waitlist", `
+      <p style="font-size:14px;color:#454a56;line-height:1.65;margin:0 0 16px;">
+        Your account was created successfully. ${APP_NAME} is currently in a
+        limited beta open to the first ${max} accounts, and yours came in after
+        that limit.
+      </p>
+      <p style="font-size:14px;color:#454a56;line-height:1.65;margin:0;">
+        There is nothing more you need to do. We will email you at this address
+        as soon as the system is released.
+      </p>`),
+    text: `Your ${APP_NAME} account was created successfully. ${APP_NAME} is currently in a limited beta open to the first ${max} accounts, and yours came in after that limit. We will email you at this address as soon as the system is released.`,
   });
 }

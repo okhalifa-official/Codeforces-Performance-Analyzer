@@ -5,6 +5,7 @@
 // which is why CI uses DATABASE_PUBLIC_URL instead.
 
 import pg from "pg";
+import { ensureBetaSchema } from "../services/beta.js";
 
 const { Pool } = pg;
 
@@ -66,4 +67,7 @@ export async function ensureSchema() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const sql = readFileSync(path.join(here, "schema.sql"), "utf8");
   await query(sql);
+  // Adds accounts.beta_waitlisted and backfills it once; see services/beta.js
+  // for why this is not a plain ADD COLUMN IF NOT EXISTS in schema.sql.
+  await ensureBetaSchema(getPool());
 }

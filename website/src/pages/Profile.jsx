@@ -2,12 +2,14 @@ import { useState } from "react";
 import { T } from "../lib/theme.js";
 import { useAuth } from "../lib/auth.jsx";
 import { api } from "../lib/api.js";
+import { useBeta } from "../lib/beta.jsx";
 import { Button, Field, Input, Card, Badge, Toast } from "../components/ui.jsx";
 import Icon from "../components/Icon.jsx";
 import { FEEDBACK_URL } from "../components/Footer.jsx";
 
 export default function Profile() {
   const { user, setUser } = useAuth();
+  const { beta } = useBeta();
   const [form, setForm] = useState({
     cf_handle: user?.cf_handle || "", full_name: user?.full_name || "",
     phone: user?.phone || "", country: user?.country || "",
@@ -56,9 +58,13 @@ export default function Profile() {
       <Card style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 20,
                       alignItems: "center", flexWrap: "wrap" }}>
-          <Badge color={user?.plan === "pro" ? T.violet : T.textFaint}>
-            {user?.plan === "pro" ? "Pro plan" : "Free plan"}
-          </Badge>
+          {beta ? (
+            <Badge color={T.violet}>Beta</Badge>
+          ) : (
+            <Badge color={user?.plan === "pro" ? T.violet : T.textFaint}>
+              {user?.plan === "pro" ? "Pro plan" : "Free plan"}
+            </Badge>
+          )}
           {user?.role === "admin" && <Badge color={T.warn}>Administrator</Badge>}
           <span style={{ fontSize: 13, color: T.textFaint }}>{user?.email}</span>
           {/* The address is fixed once the account exists, so say where to go

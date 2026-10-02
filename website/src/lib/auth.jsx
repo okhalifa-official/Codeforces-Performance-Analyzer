@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api } from "./api.js";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { api, setWaitlistHandler } from "./api.js";
 
 const AuthCtx = createContext(null);
 
@@ -21,6 +21,18 @@ export function AuthProvider({ children }) {
       setReady(true);
     }
   }, []);
+
+  // A 403 BETA_WAITLISTED from any route means this session's user object is
+  // out of date. Re-read it once; the router then shows the waitlist screen.
+  const waitlistRefreshing = useRef(false);
+  useEffect(() => {
+    setWaitlistHandler(() => {
+      if (waitlistRefreshing.current) return;
+      waitlistRefreshing.current = true;
+      refresh().finally(() => { waitlistRefreshing.current = false; });
+    });
+    return () => setWaitlistHandler(null);
+  }, [refresh]);
 
   // Bootstrapping the session is inherently an effect: it reads the cookie via
   // the API on mount and then stores the result. The lint rule targets

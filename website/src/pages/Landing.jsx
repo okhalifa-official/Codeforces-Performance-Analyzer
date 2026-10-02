@@ -3,6 +3,7 @@ import { m } from "framer-motion";
 import { Link } from "react-router-dom";
 import { T, font } from "../lib/theme.js";
 import { api } from "../lib/api.js";
+import { useBeta } from "../lib/beta.jsx";
 import { Button, Card, Badge } from "../components/ui.jsx";
 import Aurora from "../components/Aurora.jsx";
 import ProductLoop from "../components/ProductLoop.jsx";
@@ -43,6 +44,7 @@ export default function Landing() {
 /* ── Hero ────────────────────────────────────────────────────────────────── */
 
 function Hero({ trainingUsers }) {
+  const { beta, maxAccounts } = useBeta();
   return (
     <section style={{
       position: "relative", overflow: "hidden",
@@ -61,6 +63,7 @@ function Hero({ trainingUsers }) {
             fontSize: 12.5, color: T.textDim,
           }}
         >
+          {beta && <Badge color={T.violet}>Beta</Badge>}
           <Pulse />
           Retrained every week
         </m.div>
@@ -123,7 +126,9 @@ function Hero({ trainingUsers }) {
           transition={{ delay: 0.32 }}
           style={{ fontSize: 13, color: T.textFaint, margin: 0 }}
         >
-          Free forever. No card needed. Just your handle.
+          {beta
+            ? `Free during the beta, limited to the first ${maxAccounts} accounts. No card needed.`
+            : "Free forever. No card needed. Just your handle."}
         </m.p>
 
         <m.div
@@ -209,12 +214,28 @@ function HeroPreview({ trainingUsers }) {
  *  someone who already knows what they are looking at, and before the feature
  *  list so it answers "what is this actually like" before the specifics. */
 function InAction() {
+  const { beta } = useBeta();
+  // The week-long plan is the AI Coach, which the beta does not include.
+  const points = [
+    { icon: "search", tone: T.accent, title: "No setup",
+      body: "Your public Codeforces history is all it needs. No account linking, no imports." },
+    { icon: "chart", tone: T.cyan, title: "Scored against your peers",
+      body: "Every topic measured against players at your rating, so a 60 means something." },
+    { icon: "target", tone: T.warn, title: "Told where to start",
+      body: "The one topic with the most to gain, not a list of twenty things to fix." },
+    ...(beta ? [] : [
+      { icon: "sparkle", tone: T.violet, title: "A week you can follow",
+        body: "Specific problems, a warm-up each day, and a check you can tick off." },
+    ]),
+  ];
   return (
     <Section alt id="in-action">
       <SectionHead
         eyebrow="See it run"
         title="Thirty seconds, start to finish"
-        sub="One handle in. Every topic scored, your weakest found, and a week of practice you can actually follow."
+        sub={beta
+          ? "One handle in. Every topic scored, your weakest found, and the exact problems to open next."
+          : "One handle in. Every topic scored, your weakest found, and a week of practice you can actually follow."}
       />
       <div style={{
         display: "grid", gap: 40, alignItems: "center",
@@ -229,16 +250,7 @@ function InAction() {
 
         <Reveal delay={0.1}>
           <div style={{ display: "grid", gap: 20 }}>
-            {[
-              { icon: "search", tone: T.accent, title: "No setup",
-                body: "Your public Codeforces history is all it needs. No account linking, no imports." },
-              { icon: "chart", tone: T.cyan, title: "Scored against your peers",
-                body: "Every topic measured against players at your rating, so a 60 means something." },
-              { icon: "target", tone: T.warn, title: "Told where to start",
-                body: "The one topic with the most to gain, not a list of twenty things to fix." },
-              { icon: "sparkle", tone: T.violet, title: "A week you can follow",
-                body: "Specific problems, a warm-up each day, and a check you can tick off." },
-            ].map((f) => (
+            {points.map((f) => (
               <div key={f.title} style={{ display: "flex", gap: 13,
                                           alignItems: "flex-start" }}>
                 <IconTile name={f.icon} color={f.tone} size={34} iconSize={16} />
@@ -308,7 +320,10 @@ function HowItWorks() {
 /* ── Features ────────────────────────────────────────────────────────────── */
 
 function Features() {
-  const items = [
+  const { beta } = useBeta();
+  // Peer view and sorting/filtering are Plus features; the beta has no Plus.
+  const betaHidden = ["users", "filter"];
+  const all = [
     { icon: "radar", tone: T.accent, wide: true,
       title: "20 topics. One honest number each.",
       body: "Scored against people at your level — not an absolute grade." },
@@ -325,6 +340,7 @@ function Features() {
       title: "Build the session you want",
       body: "By topic. By rating." },
   ];
+  const items = beta ? all.filter((f) => !betaHidden.includes(f.icon)) : all;
   return (
     <Section alt>
       <SectionHead
@@ -427,6 +443,10 @@ const FREE = [
   { t: "AI-Coach free trial",        soon: true },
 ];
 
+// What the beta's single plan includes: the Free list minus the locked rows
+// (which only exist to sell Plus) and the AI Coach.
+const BETA_FREE = FREE.filter((f) => !f.no && !f.soon);
+
 const PLUS = [
   { t: "One analysis every 3 days",  icon: "bolt" },
   { t: "Up to 50 problems",          icon: "target" },
@@ -438,6 +458,40 @@ const PLUS = [
 ];
 
 function Pricing() {
+  const { beta, maxAccounts } = useBeta();
+
+  // The closed beta has one plan. Plus, its price and the AI Coach are not on
+  // offer, so they are not mentioned at all rather than shown as "coming soon".
+  if (beta) {
+    return (
+      <Section alt id="pricing">
+        <SectionHead
+          eyebrow="Beta"
+          title="Free while we're in beta."
+          sub="No card required to begin."
+        />
+        <div style={{ maxWidth: 420, margin: "0 auto 26px" }}>
+          <Reveal>
+            <PlanCard
+              name="Free"
+              price="0"
+              period="during the beta"
+              blurb="Find your weakest topic. Start fixing it."
+              features={BETA_FREE}
+              cta="Create a free account"
+              to="/signup"
+            />
+          </Reveal>
+        </div>
+        <p style={{ textAlign: "center", color: T.textFaint, fontSize: 13,
+                    lineHeight: 1.6, margin: 0 }}>
+          Beta &mdash; limited to the first {maxAccounts} accounts. Sign up after
+          that and we&rsquo;ll email you when the system is released.
+        </p>
+      </Section>
+    );
+  }
+
   return (
     <Section alt id="pricing">
       <SectionHead

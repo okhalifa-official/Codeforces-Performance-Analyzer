@@ -11,6 +11,7 @@ import { Card, Badge, Info, fadeUp } from "./ui.jsx";
 import Problems from "./Problems.jsx";
 import Peers from "./Peers.jsx";
 import Coach from "./Coach.jsx";
+import { useBeta } from "../lib/beta.jsx";
 import { IconTile } from "./Icon.jsx";
 
 /* Normalize whatever the pipeline returns into a flat [{key,name,score}] list.
@@ -43,6 +44,7 @@ function useTags(data) {
 
 export default function Results({ data, handle, userRating, isPro, onUpgrade, isAdmin}) {
   const tags = useTags(data);
+  const { beta } = useBeta();
   if (!tags.length) return null;
 
   // "Where to spend your next sessions" must rank real weaknesses first.
@@ -77,8 +79,12 @@ export default function Results({ data, handle, userRating, isPro, onUpgrade, is
                   isPro={isPro} onUpgrade={onUpgrade} />
       )}
 
-      <Coach data={data} handle={handle} isPro={isPro} isAdmin={isAdmin}
-             onUpgrade={onUpgrade} />
+      {/* No AI Coach in the beta: the API refuses it and there is nothing
+          to unlock. */}
+      {!beta && (
+        <Coach data={data} handle={handle} isPro={isPro} isAdmin={isAdmin}
+               onUpgrade={onUpgrade} />
+      )}
 
       <Peers peers={data?.peers} isPro={isPro} onUpgrade={onUpgrade} />
     </div>

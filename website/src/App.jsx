@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./lib/auth.jsx";
 import { T, font } from "./lib/theme.js";
 import Logo from "./components/Logo.jsx";
 import Icon from "./components/Icon.jsx";
+import { BetaProvider, useBeta } from "./lib/beta.jsx";
 import { UpgradeProvider, useUpgrade } from "./lib/upgrade.jsx";
 import UpgradeGate from "./components/UpgradeGate.jsx";
 import Footer from "./components/Footer.jsx";
@@ -19,6 +20,7 @@ const Signup    = lazy(() => import("./pages/Auth.jsx").then(m => ({ default: m.
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const Profile   = lazy(() => import("./pages/Profile.jsx"));
 const Admin     = lazy(() => import("./pages/Admin.jsx"));
+const BetaWaitlist = lazy(() => import("./pages/BetaWaitlist.jsx"));
 const Terms     = lazy(() => import("./pages/Terms.jsx"));
 const ForgotPassword = lazy(() =>
   import("./pages/Recover.jsx").then(m => ({ default: m.ForgotPassword })));
@@ -35,6 +37,7 @@ function PageFallback() {
 
 export default function App() {
   return (
+    <BetaProvider>
     <AuthProvider>
       {/* LazyMotion + the lightweight `m` component keep the animation engine
           out of the initial bundle: it is fetched once, in parallel, instead of
@@ -47,12 +50,24 @@ export default function App() {
         </UpgradeProvider>
       </LazyMotion>
     </AuthProvider>
+    </BetaProvider>
   );
+}
+
+/** A waitlisted account (past the beta's account cap) has nothing to use. The
+ *  flag only means anything while the beta is on, so it is ignored otherwise. */
+function useWaitlisted() {
+  const { user } = useAuth();
+  const { beta } = useBeta();
+  return Boolean(beta && user?.beta_waitlisted);
 }
 
 function Shell() {
   const { ready } = useAuth();
-  if (!ready) {
+  // Hold the first paint for the beta flag too, so nobody sees Plus UI flash
+  // up and then disappear (or the reverse).
+  const { loaded: betaLoaded } = useBeta();
+  if (!ready || !betaLoaded) {
     return (
       <div style={{ minHeight: "100vh", display: "grid", placeItems: "center",
                     background: T.bg }}>
@@ -90,6 +105,9 @@ function Shell() {
 
 function GlobalUpgradeGate() {
   const { open, hide } = useUpgrade();
+  const { beta } = useBeta();
+  // No Plus in the beta, so no upsell modal and nothing that opens checkout.
+  if (beta) return null;
   // No onUpgrade handler: checkout now opens inside the gate itself, so
   // closing here would dismiss the panel the moment the user commits.
   return <UpgradeGate open={open} onClose={hide} />;
@@ -104,12 +122,16 @@ function HomeRoute() {
 
 function Private({ children }) {
   const { user, accountsEnabled } = useAuth();
+  const waitlisted = useWaitlisted();
   const loc = useLocation();
   // When the deployment has no database, accounts are switched off entirely
   // and the analyzer stays usable anonymously. Guarding here would otherwise
   // lock everyone out of the only working page.
   if (!accountsEnabled) return children;
   if (!user) return <Navigate to="/login" state={{ from: loc.pathname }} replace />;
+  // Past the beta cap: every signed-in page is this one screen, so there is no
+  // route a waitlisted account can reach that shows the analyzer.
+  if (waitlisted) return <BetaWaitlist />;
   return children;
 }
 
@@ -131,6 +153,8 @@ function GuestOnly({ children }) {
 
 function Nav() {
   const { user, logout, isAdmin, accountsEnabled } = useAuth();
+  const { beta } = useBeta();
+  const waitlisted = useWaitlisted();
   const loc = useLocation();
   const link = (to, label) => (
     <Link key={to} to={to} style={{
@@ -161,12 +185,16 @@ function Nav() {
         </Link>
 
         <nav style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {!accountsEnabled ? null : user ? (
+          {!accountsEnabled ? null : waitlisted ? (
+            // The waitlist screen carries its own sign-out; there is nothing
+            // else for this account to navigate to.
+            null
+          ) : user ? (
             <>
               {link("/dashboard", "Analyse")}
               {isAdmin && link("/admin", "Admin")}
               {link("/profile", "Profile")}
-              {user.plan !== "pro" && <PlusButton />}
+              {!beta && user.plan !== "pro" && <PlusButton />}
               <Button size="sm" variant="ghost" onClick={logout}
                       style={{ marginLeft: 6 }}>
                 Sign out

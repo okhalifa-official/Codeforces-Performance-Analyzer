@@ -22,6 +22,7 @@ import {
 } from "./services/quotas.js";
 import { resourceLinesFor } from "./services/resources.js";
 import { pruneExpiredReceipts } from "./services/receipts.js";
+import { makeBetaGate, betaConfig } from "./services/beta.js";
 
 dotenv.config();
 
@@ -65,6 +66,18 @@ if (ACCOUNTS_ENABLED) {
   console.warn("DATABASE_URL not set — accounts and admin are disabled.");
   app.use((req, _res, next) => { req.user = null; next(); });
 }
+
+// Closed beta. Public (no auth, no DB) so the client can decide what to show
+// before anyone signs in.
+app.get("/api/beta-config", (_req, res) => {
+  res.json(betaConfig());
+});
+
+// Authoritative beta enforcement: after attachUser so req.user is populated,
+// before every route so nothing can be forgotten. Waitlisted accounts are
+// refused everywhere but auth/session routes; coach and payments are off for
+// everyone. A no-op when BETA_MODE is off.
+app.use(makeBetaGate(ACCOUNTS_ENABLED));
 
 // ─── Clock validation ───────────────────────────────────────────────────────
 // Subscriptions depend on an accurate clock: a device that is hours or years

@@ -2,6 +2,13 @@
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
+// A waitlisted account is refused by every API route except auth. Whoever owns
+// the session registers a callback here, so a stale tab or an old session
+// re-reads the user and lands on the waitlist screen instead of showing
+// errors on a page it can no longer use.
+let onWaitlisted = null;
+export function setWaitlistHandler(fn) { onWaitlisted = fn; }
+
 async function request(path, { method = "GET", body, signal } = {}) {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -28,6 +35,9 @@ async function request(path, { method = "GET", body, signal } = {}) {
     const err = new Error(data?.error || `Request failed (${res.status})`);
     err.status = res.status;
     err.code = data?.code;
+    if (res.status === 403 && data?.code === "BETA_WAITLISTED") {
+      try { onWaitlisted?.(); } catch { /* the error below is what matters */ }
+    }
     if (data?.code === "CLOCK_SKEW") {
       err.serverTime = data.server_time;
       err.skewMs = data.skew_ms;
@@ -39,6 +49,7 @@ async function request(path, { method = "GET", body, signal } = {}) {
 
 export const api = {
   config:  ()      => request("/api/config"),
+  betaConfig: ()   => request("/api/beta-config"),
   me:      ()      => request("/api/auth/me"),
   signup:  (body)  => request("/api/auth/signup", { method: "POST", body }),
   login:   (body)  => request("/api/auth/login",  { method: "POST", body }),

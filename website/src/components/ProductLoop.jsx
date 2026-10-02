@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import { T, font } from "../lib/theme.js";
 import Icon from "./Icon.jsx";
+import { useBeta } from "../lib/beta.jsx";
 
 /* A portrait showcase of what the product does, built from the same tokens and
  * motion as the rest of the page rather than from a recorded video.
@@ -40,6 +41,9 @@ export default function ProductLoop() {
   const [scene, setScene] = useState(0);
   const [reduced, setReduced] = useState(false);
   const timer = useRef(null);
+  // The final beat is the AI Coach's weekly plan, which the beta omits.
+  const { beta } = useBeta();
+  const scenes = beta ? 3 : 4;
 
   // A looping animation is exactly what someone disables motion to avoid, so
   // honour the preference by holding the final, most informative beat.
@@ -55,13 +59,13 @@ export default function ProductLoop() {
   useEffect(() => {
     if (reduced) return;   // no timer at all when motion is off
     timer.current = setInterval(
-      () => setScene((s) => (s + 1) % 4), SCENE_MS);
+      () => setScene((s) => (s + 1) % scenes), SCENE_MS);
     return () => clearInterval(timer.current);
-  }, [reduced]);
+  }, [reduced, scenes]);
 
   // Derived, not stored: with motion off the last beat is the one worth
   // holding, and deriving it avoids a state write during an effect.
-  const active = reduced ? 3 : scene;
+  const active = reduced ? scenes - 1 : scene;
 
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 300,
@@ -102,7 +106,7 @@ export default function ProductLoop() {
           </AnimatePresence>
         </div>
 
-        {!reduced && <Progress scene={active} />}
+        {!reduced && <Progress scene={active} count={scenes} />}
       </div>
     </div>
   );
@@ -129,11 +133,11 @@ function Chrome() {
 
 /** Which beat is playing. Reads as a story with four parts rather than a
  *  video that happens to restart. */
-function Progress({ scene }) {
+function Progress({ scene, count }) {
   return (
     <div style={{ display: "flex", gap: 4, padding: "0 16px 14px",
                   flexShrink: 0 }}>
-      {[0, 1, 2, 3].map((i) => (
+      {Array.from({ length: count }, (_, i) => i).map((i) => (
         <div key={i} style={{ flex: 1, height: 2.5, borderRadius: 999,
                               background: T.bgAlt, overflow: "hidden" }}>
           {i === scene && (

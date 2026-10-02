@@ -20,8 +20,10 @@ import {
 } from "../services/emailAuth.js";
 import { createHash } from "node:crypto";
 import {
-  sendVerificationCode, sendPasswordReset, mailConfigured,
+  sendVerificationCode, sendPasswordReset, sendBetaWaitlistNotice, mailConfigured,
 } from "../services/mail.js";
+import { createAccountWithSlot } from "../services/beta.js";
+import { getPool } from "../db/pool.js";
 
 // Bumped when the terms change, so it is visible which version each account
 // agreed to. Acceptance is implicit in creating an account, which the sign-up
@@ -65,6 +67,9 @@ const profileSchema = z.object({
 const publicUser = (u) => ({
   id: u.id, email: u.email, cf_handle: u.cf_handle, role: u.role,
   email_verified: u.email_verified !== false,
+  // Closed beta: over the account cap, signed in but not allowed to use
+  // anything. Strictly boolean so the client never sees null/undefined.
+  beta_waitlisted: u.beta_waitlisted === true,
   plan: u.plan, full_name: u.full_name, phone: u.phone, country: u.country,
   institution: u.institution, bio: u.bio, created_at: u.created_at,
   plus_expires_at: u.plus_expires_at ?? null,
@@ -236,19 +241,23 @@ router.post("/signup/confirm", async (req, res) => {
       return res.status(409).json({ error: "That code was just used." });
     }
 
-    const { rows: countRows } = await query(`SELECT count(*)::int AS n FROM accounts`);
-    const role = countRows[0].n === 0 ? "admin" : "user";
+    // Count and insert in one transaction under an advisory lock, so two
+    // confirms racing for the last beta slot cannot both get in.
+    const user = await createAccountWithSlot(getPool(), {
+      pend, termsVersion: pend.terms_version || TERMS_VERSION,
+    });
 
-    const { rows: made } = await query(
-      `INSERT INTO accounts (email, email_lower, password_hash, cf_handle, role,
-                             email_verified, email_verified_at,
-                             terms_accepted_at, terms_accepted_version)
-       VALUES ($1,$2,$3,$4,$5, true, now(), now(), $6)
-       RETURNING *`,
-      [pend.email, pend.email_lower, pend.password_hash, pend.cf_handle, role,
-       pend.terms_version || TERMS_VERSION]);
+    // Tell a waitlisted user what happens next. The account already exists, so
+    // a mail failure is logged and never fails the sign-up.
+    if (user.beta_waitlisted) {
+      try {
+        const sent = await sendBetaWaitlistNotice(user.email);
+        if (!sent.ok) console.error("beta waitlist email not sent:", sent.error);
+      } catch (err) {
+        console.error("beta waitlist email failed:", err.message);
+      }
+    }
 
-    const user = made[0];
     const token = await createSession(user.id, req);
     res.cookie(COOKIE_NAME, token, cookieOptions());
     res.status(201).json({ user: publicUser(user) });
