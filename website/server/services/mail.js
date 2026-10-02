@@ -9,7 +9,9 @@
 import { Resend } from "resend";
 import { betaMaxAccounts } from "./beta.js";
 
-const FROM = process.env.MAIL_FROM || "CFAnalyzer <onboarding@resend.dev>";
+// Must be an address on a domain verified in Resend (mail.digisolution.app).
+// Resend's shared onboarding@resend.dev sender fails alignment and lands in spam.
+const FROM = process.env.MAIL_FROM || "CFAnalyzer <no-reply@mail.digisolution.app>";
 const APP_NAME = "CFAnalyzer";
 
 // Where reset links point. In production this must be the real origin, or the
@@ -64,9 +66,15 @@ function shell(title, bodyHtml) {
                     border:1px solid #e4e6eb;padding:32px;font-family:
                     -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
         <tr><td>
-          <div style="font-size:15px;font-weight:700;color:#1a1d24;margin-bottom:24px;">
-            ${APP_NAME}
-          </div>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+            <tr>
+              <td style="padding-right:12px;">
+                <img src="${appOrigin()}/email-logo.png" width="40" height="40"
+                     alt="" style="display:block;border:0;border-radius:9px;">
+              </td>
+              <td style="font-size:15px;font-weight:700;color:#1a1d24;">${APP_NAME}</td>
+            </tr>
+          </table>
           <h1 style="font-size:19px;font-weight:700;color:#1a1d24;margin:0 0 14px;">
             ${title}
           </h1>
