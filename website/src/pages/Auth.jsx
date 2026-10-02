@@ -93,6 +93,9 @@ function AuthForm({ mode }) {
                           lineHeight: 1.6 }}>
                 We sent a 6-digit code to <strong style={{ color: T.text }}>
                 {pending}</strong>. Your account is created once you enter it.
+                <br />
+                <strong style={{ color: T.text }}>Can&apos;t see it?</strong> Check
+                your spam or junk folder. It can take a minute to arrive.
               </p>
 
               <form onSubmit={confirm}>
