@@ -54,6 +54,26 @@ TABLES = {
 }
 
 
+def _set_session_limits(conn):
+    """Make a stuck statement fail loudly instead of hanging the workflow.
+
+    The first incremental run sat in one query for the full 3 h job timeout
+    and was cancelled with no error. A statement_timeout turns that into a
+    real exception (and a rollback) in minutes. Tunable through env for the
+    rare legitimately slow statement.
+    """
+    stmt = os.environ.get("DB_STATEMENT_TIMEOUT", "20min")
+    lock = os.environ.get("DB_LOCK_TIMEOUT", "2min")
+    work_mem = os.environ.get("DB_WORK_MEM", "512MB")
+    with conn.cursor() as cur:
+        cur.execute("SELECT set_config('statement_timeout', %s, false), "
+                    "set_config('lock_timeout', %s, false), "
+                    "set_config('work_mem', %s, false)", (stmt, lock, work_mem))
+    conn.commit()
+    log.info("session limits: statement_timeout=%s lock_timeout=%s work_mem=%s",
+             stmt, lock, work_mem)
+
+
 def _migrate_column_types(cur, table):
     """Widen columns whose type no longer matches what the CSVs contain.
 
@@ -210,25 +230,44 @@ def append_delta(conn, csv_name=DELTA_CSV_NAME):
             return (0, 0)
 
         # Identity of a submission. submitted_at is what separates repeat
-        # attempts at the same problem, so it belongs in the key; it is
-        # compared NULL-safely because the pre-2026 base rows have no
-        # timestamp.
+        # attempts at the same problem, so it belongs in the key. It is the
+        # only nullable key column (the pre-2026 base rows have no timestamp),
+        # so it is COALESCEd to a sentinel and compared with plain `=`.
+        #
+        # Do NOT write these as `a.x IS NOT DISTINCT FROM b.x`: that operator
+        # is neither hashable nor mergeable, so the planner falls back to a
+        # nested loop. Against a ~4M-row delta that is ~10^13 comparisons and
+        # the load hung for the whole 3 h job timeout with no output.
         key_cols = [c for c in ("handle", "problem_id", "submitted_at") if c in cols]
-        on_clause = " AND ".join(f"t.{c} IS NOT DISTINCT FROM s.{c}"
-                                 for c in key_cols)
+
+        def key(alias, c):
+            return f"COALESCE({alias}.{c}, -1)" if c == "submitted_at" else f"{alias}.{c}"
+
+        on_clause = " AND ".join(f"{key('t', c)} = {key('s', c)}" for c in key_cols)
+        partition = ", ".join(key("x", c) for c in key_cols)
 
         # Dedup within the delta itself first: the same submission can appear
-        # in two chunks when a handle straddles a chunk boundary.
-        self_clause = " AND ".join(f"a.{c} IS NOT DISTINCT FROM b.{c}"
-                                   for c in key_cols)
+        # in two chunks when a handle straddles a chunk boundary. A window
+        # function sorts once (n log n) instead of self-joining.
+        t1 = time.time()
         cur.execute(f"""
-            DELETE FROM {staging} a USING {staging} b
-            WHERE a.ctid < b.ctid AND {self_clause}
+            DELETE FROM {staging}
+            WHERE ctid IN (
+                SELECT ctid FROM (
+                    SELECT x.ctid AS ctid,
+                           row_number() OVER (PARTITION BY {partition}
+                                              ORDER BY x.ctid) AS rn
+                    FROM {staging} x
+                ) d WHERE d.rn > 1
+            )
         """)
-        if cur.rowcount:
-            log.info("delta: collapsed %d duplicate rows inside the delta",
-                     cur.rowcount)
+        log.info("delta: collapsed %d duplicate rows inside the delta in %.0fs",
+                 cur.rowcount, time.time() - t1)
 
+        # With plain-equality keys this plans as a hash anti-join: one pass
+        # over each side. DB_WORK_MEM (see _set_session_limits) lets the hash
+        # stay in memory instead of spilling to the small data volume.
+        t2 = time.time()
         cur.execute(f"""
             INSERT INTO {table} ({collist})
             SELECT {', '.join(f's."{c}"' for c in cols)}
@@ -238,6 +277,7 @@ def append_delta(conn, csv_name=DELTA_CSV_NAME):
             )
         """)
         inserted = cur.rowcount
+        log.info("delta: inserted %d new rows in %.0fs", inserted, time.time() - t2)
         cur.execute(f"DROP TABLE {staging}")
 
         cur.execute(f"SELECT count(*) FROM {table}")
@@ -418,6 +458,7 @@ def main():
                                        and os.path.exists(delta_path))
 
     conn = raw_connection()
+    _set_session_limits(conn)
 
     if incremental:
         # Submissions grows by ~2.3M rows a week and is the only table big

@@ -97,7 +97,7 @@ jobs:
         with:
           name: chunks
           path: chunks/
-          retention-days: 1
+          retention-days: 3
 
 # ── Job 2: Parallel crawl matrix ─────────────────────────────────────────────
   crawl:
@@ -138,7 +138,10 @@ jobs:
         with:
           name: submissions-${{ matrix.chunk }}
           path: chunks/submissions_${{ matrix.chunk }}.csv
-          retention-days: 1
+          # 3 days, not 1: "Re-run failed jobs" reuses these, and a failure on
+          # Sunday morning is often not looked at until Monday. Expiry would
+          # force a fresh multi-hour crawl.
+          retention-days: 3
 
 # ── Job 3: Merge all chunks, preprocess, retrain, release ────────────────────
   merge-and-retrain:
@@ -211,7 +214,11 @@ jobs:
           echo "--- swap (runners have none; overcommit is fatal) ---"; swapon --show || echo "(no swap)"
           echo "--- disk ---";   df -h /
 
+      # Step-level timeout, well under the 180 min job timeout, so a hang
+      # fails the run in an hour instead of sitting for 3 h and ending as
+      # "cancelled". A healthy run takes ~10 min, mostly model training.
       - name: Merge chunks + preprocess + retrain
+        timeout-minutes: 60
         env:
           # Prefer the PUBLIC url: GitHub-hosted runners are outside Railway's
           # network, so the private .railway.internal host does not resolve

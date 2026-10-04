@@ -85,4 +85,8 @@ def raw_connection():
     if not url:
         raise RuntimeError("DATABASE_URL is not set")
     url = url.replace("postgresql+psycopg://", "postgresql://", 1)
-    return psycopg.connect(url)
+    # keepalives: the runner reaches Railway over a public proxy, and a silently
+    # dropped TCP connection would otherwise block a query forever.
+    return psycopg.connect(url, connect_timeout=30, keepalives=1,
+                           keepalives_idle=30, keepalives_interval=10,
+                           keepalives_count=6)
