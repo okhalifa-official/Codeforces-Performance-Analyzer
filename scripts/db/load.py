@@ -74,6 +74,18 @@ def _set_session_limits(conn):
              stmt, lock, work_mem)
 
 
+def _table_has_rows(conn, table):
+    """True when `table` exists and holds at least one row."""
+    import psycopg
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT EXISTS (SELECT 1 FROM {table})")
+            return bool(cur.fetchone()[0])
+    except psycopg.errors.UndefinedTable:
+        conn.rollback()
+        return False
+
+
 def _migrate_column_types(cur, table):
     """Widen columns whose type no longer matches what the CSVs contain.
 
@@ -447,18 +459,29 @@ def main():
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--incremental", action="store_true",
                       help="append only the new-submissions delta (default "
-                           "when the delta file exists)")
+                           "whenever submissions already has rows)")
     mode.add_argument("--full", action="store_true",
                       help="force a full reload of every table")
     args = ap.parse_args()
 
     delta_path = os.path.join(DATASET_DIR, DELTA_CSV_NAME)
-    incremental = args.incremental or (not args.full
-                                       and not args.table
-                                       and os.path.exists(delta_path))
 
     conn = raw_connection()
     _set_session_limits(conn)
+
+    # A full reload needs ~2x the table on disk, which overflows the small
+    # Railway volume (DiskFull at ~13M of 14M rows). So it is opt-in (--full /
+    # --table) or a bootstrap for an empty database. A week with no new
+    # submissions has no delta file; that must leave the table alone, not fall
+    # back to reloading it.
+    if args.full or args.table:
+        incremental = False
+    elif args.incremental:
+        incremental = True
+    else:
+        incremental = _table_has_rows(conn, "submissions")
+        if not incremental:
+            log.info("submissions is missing or empty — bootstrapping with a full load")
 
     if incremental:
         # Submissions grows by ~2.3M rows a week and is the only table big
@@ -468,6 +491,8 @@ def main():
             if result is None and args.incremental:
                 raise RuntimeError(
                     f"--incremental requested but no delta at {delta_path}")
+            if result is None:
+                log.info("no new submissions this run — submissions left as is")
             for table in ("user_tag_strengths", "user_profiles"):
                 load_table(conn, table, TABLES[table])
             conn.commit()

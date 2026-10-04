@@ -40,6 +40,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       matrix: ${{ steps.split.outputs.matrix }}
+      since_days: ${{ steps.window.outputs.since_days }}
 
     steps:
       - uses: actions/checkout@v5
@@ -61,6 +62,7 @@ jobs:
             --repo ${{ github.repository }} --limit 20 \
             --json tagName,isDraft \
             -q '[.[] | select(.isDraft == false) | select(.tagName | startswith("data-")) | .tagName] | .[0]' 2>/dev/null || echo "")
+          echo "LATEST_TAG=$LATEST" >> "$GITHUB_ENV"
           if [ -n "$LATEST" ]; then
             echo "Previous dataset release: $LATEST"
             gh release download "$LATEST" \
@@ -77,11 +79,30 @@ jobs:
           fi
           ls -lh ML/dataset/ 2>/dev/null || echo "(empty)"
 
+      # A fixed 7-day window silently loses data after a failed week: nothing
+      # is released, so the next run's window starts after the contests that
+      # were never published. Anchor the window to the last release instead:
+      # look back at least SINCE_DAYS, and at least as far as that release.
+      # Overlap is harmless, the merge dedups on (handle, problem, time).
+      - name: Compute crawl window
+        id: window
+        run: |
+          DAYS="$SINCE_DAYS"
+          if [ -n "$LATEST_TAG" ]; then
+            TAG_DATE="${LATEST_TAG#data-}"
+            AGE=$(( ( $(date -u +%s) - $(date -u -d "$TAG_DATE" +%s) ) / 86400 + 1 ))
+            echo "Last release $LATEST_TAG is $AGE day(s) old"
+            [ "$AGE" -gt "$DAYS" ] && DAYS="$AGE"
+          fi
+          [ "$DAYS" -gt 90 ] && { echo "::warning::capping window at 90 days"; DAYS=90; }
+          echo "Crawl window: $DAYS days"
+          echo "since_days=$DAYS" >> "$GITHUB_OUTPUT"
+
       - name: Split handles into chunks
         id: split
         run: |
           DATA_DIR=${{ github.workspace }} \
-          SINCE_DAYS=${{ env.SINCE_DAYS }} \
+          SINCE_DAYS=${{ steps.window.outputs.since_days }} \
           NUM_CHUNKS=${{ env.NUM_CHUNKS }} \
           CF_MIN_RATING=${{ env.CF_MIN_RATING }} \
           CF_MAX_RATING=${{ env.CF_MAX_RATING }} \
@@ -129,7 +150,7 @@ jobs:
       - name: Crawl chunk ${{ matrix.chunk }}
         run: |
           DATA_DIR=${{ github.workspace }} \
-          SINCE_DAYS=${{ env.SINCE_DAYS }} \
+          SINCE_DAYS=${{ needs.setup.outputs.since_days }} \
           CHUNK_INDEX=${{ matrix.chunk }} \
           python scripts/crawl_chunk.py
 
@@ -146,7 +167,7 @@ jobs:
 # ── Job 3: Merge all chunks, preprocess, retrain, release ────────────────────
   merge-and-retrain:
     name: Merge → Preprocess → Retrain → Release
-    needs: crawl
+    needs: [setup, crawl]
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -269,7 +290,7 @@ jobs:
           gh release create "$TAG" \
             --repo ${{ github.repository }} \
             --title "Dataset & models — $(date -u '+%Y-%m-%d %H:%M UTC')" \
-            --notes "Parallel crawl: ${{ env.NUM_CHUNKS }} jobs, last ${{ env.SINCE_DAYS }} days, rating ${{ env.CF_MIN_RATING }}–${{ env.CF_MAX_RATING }}" \
+            --notes "Parallel crawl: ${{ env.NUM_CHUNKS }} jobs, last ${{ needs.setup.outputs.since_days }} days, rating ${{ env.CF_MIN_RATING }}–${{ env.CF_MAX_RATING }}" \
             --prerelease \
             /tmp/dataset-${DATE}.tar.gz \
             /tmp/models-${DATE}.tar.gz
