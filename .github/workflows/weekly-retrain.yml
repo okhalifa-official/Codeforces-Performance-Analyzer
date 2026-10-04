@@ -1,8 +1,11 @@
 name: Weekly Crawl & Retrain
 
+# Manual only. The Sunday cron was removed: offline experiments showed the
+# weekly retrain does not measurably improve the models, and the crawl adds
+# rows that are not comparable to the original dataset (see the dataset
+# rebuild project). Run it from the Actions tab or `gh workflow run` when a
+# deliberate refresh is wanted.
 on:
-  schedule:
-    - cron: "0 2 * * 0"   # Every Sunday at 02:00 UTC
   workflow_dispatch:
     inputs:
       since_days:

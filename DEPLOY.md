@@ -4,8 +4,13 @@
 
 ### How it works
 
+> **Manual only.** The weekly schedule was removed — retraining does not measurably
+> improve the models, and the crawl adds data that is not comparable to the original
+> dataset. Trigger **Weekly Crawl & Retrain** from the Actions tab (or `gh workflow run`)
+> when you want a deliberate refresh. The diagram below is what a run does.
+
 ```
-Every Sunday 02:00 UTC (GitHub's servers, always on)
+When triggered (previously every Sunday 02:00 UTC)
   │
   ├─ 1. Download previous dataset from latest GitHub Release
   ├─ 2. Crawl Codeforces API (5,000 users, ~1.5 hrs)
@@ -109,7 +114,7 @@ in GitHub Actions.
 - Click **Run workflow** to trigger it manually for the first time
 - Watch the logs — it should download your seeded data, crawl ~5,000 users, retrain, and publish a new release
 
-After that, it runs automatically every Sunday at 02:00 UTC with no action needed from you.
+It does not run on a schedule; trigger it manually whenever a refresh is wanted.
 
 ### Manually trigger a run
 
@@ -207,9 +212,8 @@ This is what makes the weekly retrain reach the live site without you touching a
 
 Treat that URL like a password — anyone with it can trigger deploys.
 
-Now every Sunday: the retrain publishes a new release, pings this hook, Railway redeploys,
-and the site picks up the fresh models. Nothing is pushed to `main`, and you don't have to
-check on it.
+Now each run of the workflow: the retrain publishes a new release, pings this hook, Railway
+redeploys, and the site picks up the fresh models. Nothing is pushed to `main`.
 
 ## If something goes wrong
 
